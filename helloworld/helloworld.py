@@ -3,6 +3,7 @@ import os
 
 jinja_environment = jinja2.Environment(
     loader=jinja2.FileSystemLoader(os.path.dirname(__file__)))
+
 import cgi
 import datetime
 import urllib
@@ -10,6 +11,13 @@ import webapp2
 
 from google.appengine.ext import db
 from google.appengine.api import users
+from google.appengine.api import mail
+
+
+
+from google.appengine.api import mail
+from google.appengine.ext import webapp
+from google.appengine.ext.webapp.util import login_required
 
 
 class Greeting(db.Model):
@@ -65,6 +73,34 @@ class Guestbook(webapp2.RequestHandler):
     self.redirect('/?' + urllib.urlencode({'guestbook_name': guestbook_name}))
 
 
+class InviteFriendHandler(webapp2.RequestHandler):
+    def post(self):
+        user = users.get_current_user()
+        if user is None:
+          login_url = users.create_login_url(self.request.path)
+          self.redirect(login_url)
+          return
+        to_addr = self.request.get("friend_email")
+        if not mail.is_email_valid(to_addr):
+            # Return an error message...
+            pass
+
+        message = mail.EmailMessage()
+        message.sender = user.email()
+        message.to = to_addr
+        message.body = """
+I've invited you to Example.com!
+
+To accept this invitation, click the following link,
+or copy and paste the URL into your browser's address
+bar:
+
+%s
+        """ % to_addr
+
+        message.send()
+
 app = webapp2.WSGIApplication([('/', MainPage),
-                               ('/sign', Guestbook)],
+                               ('/sign', Guestbook),
+                               ('/mail',InviteFriendHandler)],
                               debug=True)
