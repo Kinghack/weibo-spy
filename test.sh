@@ -1,1 +1,1 @@
-google_appengine/dev_appserver.py --enable_sendmail helloworld/
+google_appengine/dev_appserver.py --clear_datastore weibo-spy/

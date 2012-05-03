@@ -1,0 +1,6 @@
+cron:
+- description: test cron
+  url: /cron
+  schedule: every 4 hours 
+  timezone: Asia/Shanghai
+

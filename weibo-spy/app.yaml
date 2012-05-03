@@ -1,4 +1,4 @@
-application: helloworld
+application: your-app-id 
 version: 1
 runtime: python27
 api_version: 1
@@ -8,9 +8,13 @@ handlers:
 - url: /stylesheets
   static_dir: stylesheets
 
+- url: /cron
+  script: spy.app
+  login: admin
+
 - url: /.*
-  script: helloworld.app
- 
+  script: spy.app
+
 
 libraries:
 - name: jinja2

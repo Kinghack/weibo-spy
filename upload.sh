@@ -1,1 +1,1 @@
-google_appengine/appcfg.py update helloworld/
+google_appengine/appcfg.py update weibo-spy/
