@@ -1,9 +1,10 @@
 #coding:utf-8
 #get from sina
-app_key = ''
-app_secret = ''
+APP_KEY = ''
+APP_SECRET = ''
 #It is suggested that you just use the account of GAE
-Mail_from = '@gmail.com'
+Mail_from = ''
 #Any mail address which is valid
-Mail_to = '@gmail.com'
+Mail_to = ''
 
+CALLBACK_URL = ''

@@ -1,48 +1,53 @@
 # coding=utf-8
 
-import urllib,re,sys
+import sys
 
 import webapp2
-from google.appengine.ext import webapp,db
+from google.appengine.ext import db
 from google.appengine.api import mail
 
-sys.path.insert(0, 'weibopy.zip')
-sys.path.append('weibopy.zip/weibopy')
-sys.path.insert(0, 'tweepy.zip')
-sys.path.append('tweepy.zip/tweepy')
-
-import tweepy
-from weibopy.auth import OAuthHandler
-from weibopy.api import API
-from weibopy.error import WeibopError 
-from config import app_key , app_secret
+from weibo import APIClient
+from config import APP_KEY , APP_SECRET, CALLBACK_URL
 from config import Mail_from , Mail_to
 
 
-html_src = """
+spy = """
 <html>
-<head><title>Weibo-spy</title></head>
+<head><title>Weibo-spy-dev</title></head>
 <body><center>
 <h1>Weipo-Spy</h1>
 <h3>Help to follow the tweet which you never want to miss</h3>
 <form action="/result" method="post">
 <table>
-<tr><td>Sina email: </td><td><input type="text" name="s_name" /></td><td></td></tr>
 <tr><td>监视对象屏显名称: </td><td><input type="text" name="god_name" /></td><td></td></tr>
-<tr><td>Sina Oauth PIN: </td><td><input type="text" name="s_pin" /></td><td><a href="%s" target="_blank">Get Sina Oauth Pin</a></td></tr>
 </table>
-<input type="hidden" name="s_request_key" value="%s"><br>
-<input type="hidden" name="s_request_secret" value="%s"><br>
+<input type="hidden" name="access_token" value="%s"><br>
+<input type="hidden" name="expires_in" value="%s"><br>
 <input type="submit" value="Submit">
 </center></body>
 </html>
 """
 
+index = """
+<html>
+<head><title>Weibo-spy-dev</title></head>
+<body><center>
+<h1>Weipo-Spy</h1>
+<h3>Help to follow the tweet which you never want to miss</h3>
+<form action="/result" method="post">
+<table>
+<tr><td><a href="%s" target="_blank">登录微博</a></td></tr>
+</table>
+</center></body>
+</html>
+"""
+
+
 
 class OauthUser(db.Model):
-    sina_name = db.StringProperty()
-    sina_access_key = db.StringProperty()
-    sina_access_secret = db.StringProperty()
+    sina_uid = db.StringProperty()
+    sina_access_token = db.StringProperty()
+    sina_expires = db.IntegerProperty()
 
 class God(db.Model):
     user = db.ReferenceProperty(OauthUser,collection_name='god_name')
@@ -51,51 +56,56 @@ class God(db.Model):
 
 class MainPage(webapp2.RequestHandler):
     def get(self):
-        sina = OAuthHandler(app_key,app_secret)
-        sina_auth_url = sina.get_authorization_url()
-        self.response.out.write(html_src % (sina_auth_url,sina.request_token.key,sina.request_token.secret))
+	code = self.request.get('code') or None
+	client = APIClient(app_key=APP_KEY, app_secret=APP_SECRET, 
+		        redirect_uri=CALLBACK_URL)
+	if not code:
+		url = client.get_authorize_url()
+        	self.response.out.write(index % (url))
+	else:
+		r = client.request_access_token(code)
+		access_token = r.access_token
+		expires_in = r.expires_in
+		client.set_access_token(access_token, expires_in)
+		info = client.statuses.user_timeline.get()
+	    	oauth_user = OauthUser(key_name=info['statuses'][0]['user']['idstr'])
+	    	oauth_user.sina_uid = info['statuses'][0]['user']['idstr']
+	    	oauth_user.sina_access_token = str(access_token)
+	    	oauth_user.sina_expires = expires_in
+	    	oauth_user.put()
+        	self.response.out.write(spy % (oauth_user.sina_access_token, oauth_user.sina_expires))
 
 class FormHandler(webapp2.RequestHandler):
     def post(self):
-        s_name = self.request.get('s_name')
-        s_request_key = self.request.get('s_request_key')
-        s_request_secret = self.request.get('s_request_secret')
-        s_pin = self.request.get('s_pin')
+	god_name = self.request.get('god_name')
+	access_token = self.request.get('access_token')
+	expires_in = self.request.get('expires_in')
         self.response.out.write("""<html><head><title>Weibo-spy-result</title></head><body><center>""")
-        if  s_name =="" or s_pin == "":
+        if  god_name == "":
             self.response.out.write("""<h2>4 Input can not be empty! <a href="/">Back</a></h2>""")
         else:
-            sina = OAuthHandler(app_key,app_secret)
-            sina.set_request_token(s_request_key,s_request_secret)
-            s_access_token = sina.get_access_token(s_pin.strip())
-            sina_api = API(sina)
 
-            
+            client = APIClient(app_key=APP_KEY, app_secret=APP_SECRET, 
+			     redirect_uri=CALLBACK_URL)
+	    client.set_access_token(access_token, expires_in)
+            info = client.statuses.user_timeline.get()
+	    #可以考虑cookie
+	    oauth_user = OauthUser(key_name=info['statuses'][0]['user']['idstr'])
+	    oauth_user.sina_uid = info['statuses'][0]['user']['idstr']
+	    oauth_user.sina_access_token = str(access_token)
+	    oauth_user.sina_expires = int(expires_in)
 
-            #sina
-            
-            god_name = self.request.get('god_name')
-            ttl = sina_api.user_timeline(screen_name=god_name)
-            oauth_user = OauthUser(key_name=s_name)
-            oauth_user.sina_name = s_name
-            oauth_user.sina_access_key = s_access_token.key
-            oauth_user.sina_access_secret = s_access_token.secret
-            oauth_user.put()
-    
+	    status = client.statuses.user_timeline.get(screen_name=god_name)
+
+                
             God(user=oauth_user,
                 god_name=god_name,
-                sina_last_id=str(ttl[0].id)).put()
+                sina_last_id=str(status['statuses'][0]['id'])).put()
 
-
-            try:
-                ttl = sina_api.user_timeline(screen_name=god_name)
-            except WeibopError,e:
-                self.response.out.write(e)
-            else:
-                self.response.out.write('Your spy settings are successfully done!<br>')
-                self.response.out.write('The last tweet synchronized is below:<br>')
-                for result in ttl:
-                      self.response.out.write('<b>%s</b><br>' % result.text)
+            self.response.out.write('Your spy settings are successfully done!<br>')
+            self.response.out.write('The last tweet synchronized is below:<br>')
+            for result in status['statuses']:
+            	self.response.out.write('<b>%s</b><br>' % result.text)
         self.response.out.write('</center></body></html>')
 
 
@@ -104,28 +114,27 @@ class AutoSync(webapp2.RequestHandler):
         query = db.GqlQuery("SELECT * FROM OauthUser")
         if query.count() > 0:
             for result in query:
-                sina = OAuthHandler(app_key,app_secret)
-                sina.set_request_token(result.sina_access_key,result.sina_access_secret)
-                sina_api = API(sina)
+            	client = APIClient(app_key=APP_KEY, app_secret=APP_SECRET, 
+				     redirect_uri=CALLBACK_URL)
+	    	client.set_access_token(result.sina_access_token, result.sina_expires)
                 
                 for god in result.god_name:
-                   ttl = sina_api.user_timeline(screen_name=god.god_name)
-                   last_id = god.sina_last_id
+                   ttl = client.statuses.user_timeline.get(screen_name=god.god_name, since_id=god.sina_last_id)
                    tweet = "" 
-                   for res in ttl:
-                      if int(res.id) > int(last_id):
-                         tweet = tweet + res.text + "  "
+		   if len(ttl['statuses']) > 0:
+                   	god.sina_last_id=ttl['statuses'][0]['idstr']
+                   	god.put()
+                   for res in ttl['statuses']:
+                    	   tweet = tweet + res.text + "NEXT"
                    if len(tweet) > 0:
-                       message = mail.EmailMessage()
-                       message.subject = god.god_name
-                       message.sender = Mail_from
-                       message.to = Mail_to
-                       message.body = """ 
+                           message = mail.EmailMessage()
+                           message.subject = god.god_name
+                           message.sender = Mail_from
+                           message.to = Mail_to
+                           message.body = """ 
 %s
-                       """ % tweet
-                       message.send()
-                       god.sina_last_id=str(ttl[0].id)
-                       god.put()
+                           """ % tweet
+                           message.send()
 
 
 app = webapp2.WSGIApplication(
@@ -134,5 +143,4 @@ app = webapp2.WSGIApplication(
      ('/cron', AutoSync),
      ],
     debug = True)
-
 

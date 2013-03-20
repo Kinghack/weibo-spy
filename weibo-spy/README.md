@@ -21,4 +21,10 @@ cron.yaml中填写你想要的时间间隔，默认每四小时一次；
 
 新浪Oauth认证学习了这份[源码](https://github.com/PinkyJie/Twitter2Sina)。
 
+###UPDATE 2013.3.20
 
+这个东西完成后不久，新浪就把认证迁移到OAUTH3去了。
+
+现在也能支持了。
+
+用了[廖雪峰](http://www.liaoxuefeng.com/articles)的 [sdk](https://github.com/michaelliao/sinaweibopy/wiki/OAuth2-HOWTO)。在此感谢。
